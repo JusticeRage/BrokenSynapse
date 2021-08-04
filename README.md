@@ -7,6 +7,8 @@ I realize that these scripts could be used to enable cheating in multiplayer mod
 
 All the code is released under the terms of the [GPLv3 license](https://www.gnu.org/licenses/gpl-3.0.en.html).
 
+The python files were made using Python 2.7
+
 ## frozen.py
 
 This script is a quick client implementation which enables you to log into the game's server and get information from the lobby. You can also use it to download *encounter* files, which describe games.
