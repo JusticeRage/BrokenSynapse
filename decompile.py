@@ -469,6 +469,12 @@ def decompile(dso, sink=None, in_function=False, offset=0):
             elif opcode == "META_ENDWHILE":
                 ip += 1
                 int_stack.pop()  # A test condition will have been pushed and needs to be cleaned.
+        elif opcode == "OP_BITOR":
+            op = int_stack.pop()
+            int_stack.append("%s | %s" % (int_stack.pop(), op)) # kind of winged this and it worked
+        elif opcode == "OP_BITAND":
+            op = int_stack.pop()
+            int_stack.append("%s & %s" % (int_stack.pop(), op))
 
         else:
             print("%s not implemented yet. Stopped at ip=%d." % (opcode, ip), file=sys.stderr)
