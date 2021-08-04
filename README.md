@@ -7,7 +7,7 @@ I realize that these scripts could be used to enable cheating in multiplayer mod
 
 All the code is released under the terms of the [GPLv3 license](https://www.gnu.org/licenses/gpl-3.0.en.html).
 
-This tool was designed for Python 2.7
+This tool was designed for Python 2.7.
 
 ## frozen.py
 
