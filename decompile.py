@@ -249,6 +249,10 @@ def decompile(dso, sink=None, in_function=False, offset=0):
             current_object = string_stack.pop()
         elif opcode == "OP_SETCUROBJECT_NEW":
             current_object = None
+        elif opcode == "OP_SETCUROBJECT_INTERNAL":
+            ip += 1
+            current_object = string_stack.pop()
+            int_stack.append(current_object)
         elif opcode == "OP_SETCURFIELD":
             current_field = dso.get_string(dso.code[ip])
             ip += ste_size
