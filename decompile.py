@@ -96,7 +96,7 @@ def decompile(dso, sink=None, in_function=False, offset=0):
                 string_stack.append('%s' % op if is_number(op) else "'%s'" % op)
             else:
                 # Also escape any double quote in the string.
-                string_stack.append('%s' % op if is_number(op) else '"%s"' % op.replace('"', r'\"'))
+                string_stack.append('%s' % op if is_number(op) else '"%s"' % op.replace(b'"', b'\"'))
         elif opcode == "OP_SETCURVAR_CREATE" or opcode == "OP_SETCURVAR":
             current_variable = dso.get_string(dso.code[ip])  # Always lookup in the global ST for this opcode
             ip += ste_size
