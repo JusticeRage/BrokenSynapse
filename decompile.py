@@ -479,7 +479,10 @@ def decompile(dso, sink=None, in_function=False, offset=0):
         elif opcode == "OP_BITAND":
             op = int_stack.pop()
             int_stack.append("%s & %s" % (int_stack.pop(), op))
-
+        elif opcode == "OP_ASSERT":
+            pos = dso.code[ip]
+            ip += 1
+            print(indentation*"\t" + "assert(\"%s\");" % dso.get_string(pos, in_function), file=sink)
         else:
             print("%s not implemented yet. Stopped at ip=%d." % (opcode, ip), file=sys.stderr)
             sys.exit(1)
