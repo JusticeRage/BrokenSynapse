@@ -122,19 +122,30 @@ COMPARISON = {
 
 # Fixes opcodes for legacy Torque versions.
 def translate_opcode(version, opcode):
+    if opcode >= 0x1000:  # Don't muddle my opcodes
+        return opcode
     if version <= 36:
-        if opcode >= 0x1000:  # Don't muddle my opcodes
-            return opcode
-        elif opcode >= 67:
+        if opcode >= 67:
             return opcode + 2
         elif opcode >= 46:
+            return opcode + 1
+    elif version <= 44:
+        if opcode >= 82:
+            return opcode + 4
+        elif opcode >= 81:
+            return opcode + 4
+        elif opcode >= 49:
+            return opcode + 3
+        elif opcode >= 12:
+            return opcode + 2
+        elif opcode >= 4:
             return opcode + 1
     return opcode
 
 
 def get_opcode(version, value):
     # Fix the opcode for scripts compiled with an old version.
-    if version < 44:
+    if version < 47:
         value = translate_opcode(version, value)
     if value in OPCODES:
         return OPCODES[value]
