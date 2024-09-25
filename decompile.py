@@ -218,8 +218,8 @@ def decompile(dso, sink=None, in_function=False, offset=0):
             int_stack.append(object_creation)
             indentation += 1
             arguments.pop()
-            # Structure: parent (size = 1 or 2), isDataBlock, isInternal, isMessage, failjump.
-            ip += 4 + ste_size
+            # Structure: parent (size = 1 or 2), isDataBlock, isInternal, isSingleton, lineNumber, failjump.
+            ip += 5 + ste_size
         elif opcode == "OP_ADD_OBJECT":
             ip += 1
             pass
