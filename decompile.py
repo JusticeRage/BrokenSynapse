@@ -220,7 +220,7 @@ def decompile(dso, sink=None, in_function=False, offset=0):
             arguments.pop()
             # Structure: parent (size = 1 or 2), isDataBlock, isInternal, isSingleton, lineNumber, failjump.
             ip += 5 + ste_size
-            if (version < 45):
+            if (dso.version < 45):
                 ip -= 1 # Older versions don't have a byte for lineNumber
         elif opcode == "OP_ADD_OBJECT":
             ip += 1
