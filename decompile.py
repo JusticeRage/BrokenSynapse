@@ -96,7 +96,7 @@ def decompile(dso, sink=None, in_function=False, offset=0):
                 string_stack.append('%s' % op if is_number(op) else "'%s'" % op)
             else:
                 # Also escape any double quote in the string.
-                string_stack.append('%s' % op if is_number(op) else '"%s"' % op.replace(b'"', b'\"'))
+                string_stack.append('%s' % op if is_number(op) else '"%s"' % op.replace('"', r'\"'))
         elif opcode == "OP_SETCURVAR_CREATE" or opcode == "OP_SETCURVAR":
             current_variable = dso.get_string(dso.code[ip])  # Always lookup in the global ST for this opcode
             ip += ste_size
@@ -196,6 +196,8 @@ def decompile(dso, sink=None, in_function=False, offset=0):
             elif ip != len(dso.code) and dso.code[ip] != METADATA["META_ENDFUNC"]:
                 # Omit the return if the function or the script ends here
                 print(indentation*"\t" + "return;", file=sink)
+        elif opcode == "OP_RETURN_VOID":
+            pass
         elif opcode == "META_ENDFUNC":
             if in_function:
                 in_function = False

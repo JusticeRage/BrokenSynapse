@@ -74,7 +74,8 @@ class DSOFile:
             st = self.global_string_table
         else:
             st = self.function_string_table
-        return st[offset:st.find(b"\x00", offset)].rstrip(b"\n")
+        st = st.decode("UTF-8")
+        return st[offset:st.find("\x00", offset)].rstrip("\n")
 
     def get_float(self, pos, in_function = False):
         """
