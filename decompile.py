@@ -481,6 +481,18 @@ def decompile(dso, sink=None, in_function=False, offset=0):
         elif opcode == "OP_BITAND":
             op = int_stack.pop()
             int_stack.append("%s & %s" % (int_stack.pop(), op))
+        elif opcode == "OP_SHR":
+            op = int_stack.pop()
+            int_stack.append("%s >> %s" % (int_stack.pop(), op))
+        elif opcode == "OP_SHL":
+            op = int_stack.pop()
+            int_stack.append("%s << %s" % (int_stack.pop(), op))
+        elif opcode == "OP_AND":
+            op = int_stack.pop()
+            int_stack.append("%s && %s" % (int_stack.pop(), op))
+        elif opcode == "OP_OR":
+            op = int_stack.pop()
+            int_stack.append("%s || %s" % (int_stack.pop(), op))
         elif opcode == "OP_ASSERT":
             pos = dso.code[ip]
             ip += 1
