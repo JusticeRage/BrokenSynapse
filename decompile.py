@@ -143,6 +143,8 @@ def decompile(dso, sink=None, in_function=False, offset=0):
             float_stack.append(dso.get_float(pos, in_function))
         elif opcode == "OP_SAVEVAR_FLT":
             print(indentation*"\t" + '%s = %s;' % (current_variable, str(float_stack[-1])), file=sink)
+        elif opcode == "OP_FLT_TO_UINT":
+            int_stack.append(float_stack.pop())
         elif opcode == "OP_FLT_TO_NONE":
             float_stack.pop()
         elif opcode == "OP_LOADIMMED_IDENT":
