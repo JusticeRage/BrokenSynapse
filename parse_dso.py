@@ -163,7 +163,7 @@ def main():
                 raise
             if not args.stdout:
                 out.close()
-                print("%s successfully decommpiled to %s." % (f, outfile))
+                print("%s successfully decompiled to %s." % (f, outfile))
 
 
 if __name__ == "__main__":

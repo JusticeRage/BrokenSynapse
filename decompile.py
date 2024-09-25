@@ -259,7 +259,7 @@ def decompile(dso, sink=None, in_function=False, offset=0):
         elif opcode == "OP_SETCURFIELD_ARRAY":
             pass
         elif opcode == "OP_REWIND_STR":
-            if get_opcode(dso.version, dso.code[ip]).startswith("OP_SETCURVAR_ARRAY"):  # This is an array access
+            if ip < len(dso.code) and get_opcode(dso.version, dso.code[ip]).startswith("OP_SETCURVAR_ARRAY"):  # This is an array access
                 s2 = string_stack.pop()
                 string_stack.append("%s[%s]" % (string_stack.pop(), s2))
             else:
