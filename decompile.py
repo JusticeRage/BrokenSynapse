@@ -231,6 +231,8 @@ def decompile(dso, sink=None, in_function=False, offset=0):
                 int_stack.append(op[:-3-indentation])
             else:
                 int_stack.append(op + indentation*"\t" + "}")
+        elif opcode == "OP_FINISH_OBJECT":
+            pass
         elif opcode == "OP_ADVANCE_STR":
             pass
         elif opcode == "OP_ADVANCE_STR_NUL":
