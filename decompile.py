@@ -306,11 +306,15 @@ def decompile(dso, sink=None, in_function=False, offset=0):
             op1 = "%s %s %s" % (str(op1), COMPARISON[opcode], str(op2))
             int_stack.append(op1)
         elif opcode == "OP_JMP":
-            # Normally, these opcode should only be encountered because of the "break" keyword.
             jmp_target = dso.code[ip]
             opcode_before_dest = get_opcode(dso.version, dso.code[jmp_target - 1])
-            assert opcode_before_dest == "META_ENDWHILE" or opcode_before_dest == "META_ENDWHILE_FLT";
-            print(indentation*"\t" + "break;", file=sink)
+            if opcode_before_dest == "META_ENDWHILE" or opcode_before_dest == "META_ENDWHILE_FLT":
+                # Jumping before the end of a while loop means the "break" keyword was used
+                assert opcode_before_dest == "META_ENDWHILE" or opcode_before_dest == "META_ENDWHILE_FLT";
+                print(indentation*"\t" + "break;", file=sink)
+            else:
+                # We should probably have some assert here that checks for the start of a while loop but I'm pretty sure the only case is for the "continue" keyword
+                print(indentation*"\t" + "continue;", file=sink)
             ip += 1
         elif opcode == "OP_JMPIF_NP":
             binary_stack.append(str(int_stack.pop()) + " || ")
