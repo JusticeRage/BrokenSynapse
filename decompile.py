@@ -139,6 +139,8 @@ def decompile(dso, sink=None, in_function=False, offset=0):
                 print(indentation*"\t" + int_stack.pop(), file=sink)
             else:
                 int_stack.pop()
+        elif opcode == "OP_UINT_TO_FLT":
+            float_stack.append(int_stack.pop())
         elif opcode == "OP_LOADIMMED_FLT":
             pos = dso.code[ip]
             ip += 1
