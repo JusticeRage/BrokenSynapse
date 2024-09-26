@@ -313,12 +313,12 @@ def decompile(dso, sink=None, in_function=False, offset=0):
             print(indentation*"\t" + "break;", file=sink)
             ip += 1
         elif opcode == "OP_JMPIF_NP":
-            binary_stack.append(int_stack.pop() + " || ")
+            binary_stack.append(str(int_stack.pop()) + " || ")
             jmp_target = dso.code[ip] - offset
             dso.code.insert(jmp_target, METADATA["META_END_BINARYOP"])
             ip += 1
         elif opcode == "OP_JMPIFNOT_NP":
-            binary_stack.append(int_stack.pop() + " && ")
+            binary_stack.append(str(int_stack.pop()) + " && ")
             jmp_target = dso.code[ip] - offset
             dso.code.insert(jmp_target, METADATA["META_END_BINARYOP"])
             ip += 1
