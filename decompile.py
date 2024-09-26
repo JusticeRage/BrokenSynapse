@@ -82,7 +82,7 @@ def decompile(dso, sink=None, in_function=False, offset=0):
     while ip < len(dso.code):
         opcode = get_opcode(dso.version, dso.code[ip])
         # For debugging
-        # print("Opcode: %s\nHex: %s\nIp: %s\n" % (opcode, hex(dso.code[ip]), ip))
+        # print("Opcode: %s\nHex: %s\nIp: %s\n" % (opcode, hex(dso.code[ip]), ip), file=sys.stderr)
         if not opcode:
             raise ValueError("Encountered a value which does not translate to an opcode (%d)." % dso.code[ip])
         ip += 1
@@ -312,10 +312,12 @@ def decompile(dso, sink=None, in_function=False, offset=0):
             opcode_before_dest = get_opcode(dso.version, dso.code[jmp_target - 1])
             if opcode_before_dest == "META_ENDWHILE" or opcode_before_dest == "META_ENDWHILE_FLT":
                 # Jumping before the end of a while loop means the "break" keyword was used
-                assert opcode_before_dest == "META_ENDWHILE" or opcode_before_dest == "META_ENDWHILE_FLT";
                 print(indentation*"\t" + "break;", file=sink)
+            elif get_opcode(dso.version, dso.code[ip + 1]) == "OP_ITER_END":
+                # Jumping right before the end of a foreach loop means no keyword was used
+                pass
             else:
-                # We should probably have some assert here that checks for the start of a while loop but I'm pretty sure the only case is for the "continue" keyword
+                # We should probably have some assert here that checks for the start of a loop but I'm pretty sure the only other case is for the "continue" keyword
                 print(indentation*"\t" + "continue;", file=sink)
             ip += 1
         elif opcode == "OP_JMPIF_NP":
@@ -396,7 +398,6 @@ def decompile(dso, sink=None, in_function=False, offset=0):
                 # This may be an easy while loop:
                 if opcode == "OP_JMPIFNOT":
                     print(ind + "while(%s)\n" % int_stack.pop() + ind + "{", file=sink)
-                    dso.code[jmp_target - 2] = METADATA["META_ENDWHILE"]
                 elif opcode == "OP_JMPIFFNOT":
                     print(ind + "while(%s)\n" % float_stack.pop() + ind + "{", file=sink)
                 if opcode_before_dest == "OP_JMPIFNOT" or opcode_before_dest == "OP_JMPIF":
@@ -477,7 +478,7 @@ def decompile(dso, sink=None, in_function=False, offset=0):
             ind = (indentation-1)*"\t"
             print(ind + "}\n" + ind + "else\n" + ind + "{", file=sink)
             ip += 1  # META_ELSE replaces an existing opcode so there it doesn't cause problems - no need to del it
-        elif opcode == "META_ENDIF" or opcode == "META_ENDWHILE_FLT" or opcode == "META_ENDWHILE":
+        elif opcode == "META_ENDIF" or opcode == "META_ENDWHILE_FLT" or opcode == "META_ENDWHILE" or opcode == "OP_ITER_END":
             indentation -= 1
             print(indentation*"\t" + "}", file=sink)
             if opcode == "META_ENDIF":
@@ -508,9 +509,15 @@ def decompile(dso, sink=None, in_function=False, offset=0):
             op = int_stack.pop()
             int_stack.append("%s || %s" % (int_stack.pop(), op))
         elif opcode == "OP_ASSERT":
-            pos = dso.code[ip]
+            print(indentation*"\t" + "assert(\"%s\");" % dso.get_string(dso.code[ip], in_function), file=sink)
             ip += 1
-            print(indentation*"\t" + "assert(\"%s\");" % dso.get_string(pos, in_function), file=sink)
+        elif opcode == "OP_ITER_BEGIN":
+            ind = indentation*"\t"
+            print(ind + "foreach(%s in %s)\n" % (dso.get_string(dso.code[ip]), string_stack.pop()) + ind + "{", file=sink)
+            ip += 3
+            indentation += 1
+        elif opcode == "OP_ITER":
+            ip += 1
         else:
             print("%s not implemented yet. Stopped at ip=%d." % (opcode, ip), file=sys.stderr)
             sys.exit(1)
