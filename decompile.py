@@ -81,6 +81,8 @@ def decompile(dso, sink=None, in_function=False, offset=0):
     # The big switch-case
     while ip < len(dso.code):
         opcode = get_opcode(dso.version, dso.code[ip])
+        # For debugging
+        # print("Opcode: %s\nHex: %s\nIp: %s\n" % (opcode, hex(dso.code[ip]), ip))
         if not opcode:
             raise ValueError("Encountered a value which does not translate to an opcode (%d)." % dso.code[ip])
         ip += 1
@@ -382,19 +384,18 @@ def decompile(dso, sink=None, in_function=False, offset=0):
                 # Annotate code
                 dso.code[jmp_target - 2] = METADATA["META_ELSE"]
                 dso.code.insert(dso.code[jmp_target - 1], METADATA["META_ENDIF"])
-            elif opcode_before_dest == "OP_JMPIFNOT" or opcode_before_dest == "OP_JMPIF":  # For/While loop
+            elif opcode_before_dest == "OP_JMPIFNOT" or opcode_before_dest == "OP_JMPIF" or opcode_before_dest == "OP_JMPIFF":  # For/While loop
                 ind = indentation*"\t"
                 # This may be an easy while loop:
-                if get_opcode(dso.version, dso.code[jmp_target - 3]) == "OP_NOTF":
+                if opcode == "OP_JMPIFNOT":
                     print(ind + "while(%s)\n" % int_stack.pop() + ind + "{", file=sink)
                     dso.code[jmp_target - 2] = METADATA["META_ENDWHILE"]
-                else:
-                    print(ind + "while(%s)\n" % (int_stack.pop()) + ind + "{", file=sink)
-                dso.code[jmp_target - 2] = METADATA["META_ENDWHILE"]
-            elif opcode_before_dest == "OP_JMPIFF":  # While loop
-                ind = indentation*"\t"
-                print(ind + "while(%s)\n" % float_stack.pop() + ind + "{", file=sink)
-                dso.code[jmp_target - 2] = METADATA["META_ENDWHILE_FLT"]
+                elif opcode == "OP_JMPIFFNOT":
+                    print(ind + "while(%s)\n" % float_stack.pop() + ind + "{", file=sink)
+                if opcode_before_dest == "OP_JMPIFNOT" or opcode_before_dest == "OP_JMPIF":
+                    dso.code[jmp_target - 2] = METADATA["META_ENDWHILE"]
+                elif opcode_before_dest == "OP_JMPIFF": 
+                    dso.code[jmp_target - 2] = METADATA["META_ENDWHILE_FLT"]
             else:
                 # Generic opcode before the jump target. We assume that the execution is continuing and
                 # that this is therefore a simple If control structure.
