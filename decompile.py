@@ -2,6 +2,7 @@ from __future__ import print_function
 import sys
 import os
 import copy
+import bisect
 
 from torque_vm_values import *
 
@@ -48,7 +49,34 @@ def partial_decompile(dso, start, end, in_function, previous_offset=0):
     dso_copy.code = dso.code[start:end]  # Stop just before the comparison opcode
     with open(os.devnull, 'w') as f:
         return decompile(dso_copy, sink=f, in_function=in_function, offset=start + previous_offset)
+        
+def get_jmp_target(dso, jmp, code_inserts, offset):
+    """
+    Finds original jump target and returns the position of the earliest metadata before it or itself 
+    if there is none. This is useful for finding code at a relative position left of the jump target
+    @param  dso          The object in which the jump was found
+    @param  jmp          Index of parameter to jump, jmp - 1 contains the opcode with a jump
+    @param  code_inserts Sorted list with indexes of where code is currently inserted
+    @param  offset       An offset to apply to absolute jumps.
+    """
+    jmp_target = dso.code[jmp] - offset
+    for i in range(len(code_inserts)):
+        if (jmp_target <= code_inserts[i]):
+            break
+        jmp_target += 1
+    return jmp_target
+        
+def insert_code(dso, code_inserts, index, value):
+    dso.code.insert(index, value)
+    for i in range(bisect.bisect_left(code_inserts, index), len(code_inserts)):
+        code_inserts[i] += 1
+    bisect.insort(code_inserts, index)
 
+def delete_code(dso, code_inserts, index):
+    del dso.code[index]
+    del code_inserts[bisect.bisect_left(code_inserts, index)]
+    for i in range(bisect.bisect_left(code_inserts, index), len(code_inserts)):
+        code_inserts[i] -= 1
 
 def decompile(dso, sink=None, in_function=False, offset=0):
     """
@@ -77,6 +105,7 @@ def decompile(dso, sink=None, in_function=False, offset=0):
     current_object = None
     indentation = 0
     previous_opcodes = ["OP_INVALID", "OP_INVALID", "OP_INVALID", "OP_INVALID", "OP_INVALID"]
+    code_inserts = []
     
     # For debugging
     # for i in range(len(dso.code)):
@@ -86,7 +115,7 @@ def decompile(dso, sink=None, in_function=False, offset=0):
     while ip < len(dso.code):
         opcode = get_opcode(dso.version, dso.code[ip])
         # For debugging
-        # print("Opcode: %s\nValue: %s\nIp: %s\n" % (opcode, hex(dso.code[ip]), hex(ip)), file=sys.stderr)
+        # print("Opcode: %s\nValue: %s\nIp: %s\n" % (opcode, hex(dso.code[ip]), hex(ip)), file=sys.stdout)
         if not opcode:
             raise ValueError("Encountered a value which does not translate to an opcode (%d)." % dso.code[ip])
         ip += 1
@@ -190,7 +219,7 @@ def decompile(dso, sink=None, in_function=False, offset=0):
             end_ip = dso.code[ip + 3*ste_size + 1]
             # Mark the end of the function so we can close the bracket and unindent.
             # We can't rely on "return" because a function may have multiple exit points.
-            dso.code.insert(end_ip, METADATA["META_ENDFUNC"])
+            insert_code(dso, code_inserts, end_ip, METADATA["META_ENDFUNC"])
             argc = dso.code[ip + 3*ste_size + 2]
             argv = []
             for i in range(0, argc):
@@ -215,7 +244,7 @@ def decompile(dso, sink=None, in_function=False, offset=0):
                 in_function = False
                 indentation -= 1
                 print(indentation*"\t" + "}\n", file=sink)
-            del dso.code[ip - 1]  # Delete the metadata we added to avoid desyncing absolute jumps.
+            delete_code(dso, code_inserts, ip - 1)  # Delete the metadata we added to avoid desyncing absolute jumps.
             ip -= 1
         elif opcode == "OP_CREATE_OBJECT":
             #  A 0 has been pushed to the int stack because it will contain a handle to the object.
@@ -314,9 +343,9 @@ def decompile(dso, sink=None, in_function=False, offset=0):
             op1 = "%s %s %s" % (str(op1), COMPARISON[opcode], str(op2))
             int_stack.append(op1)
         elif opcode == "OP_JMP":
-            jmp_target = dso.code[ip]
-            opcode_before_dest = get_opcode(dso.version, dso.code[jmp_target - 1])
-            if opcode_before_dest == "META_ENDWHILE" or opcode_before_dest == "META_ENDWHILE_FLT":
+            jmp_target = get_jmp_target(dso, ip, code_inserts, offset)
+            opcode_before_dest = get_opcode(dso.version, dso.code[jmp_target - 2])
+            if opcode_before_dest == "META_ENDWHILE" or opcode_before_dest == "META_ENDWHILE_FLT" or opcode_before_dest == "OP_ITER_END":
                 # Jumping after the end of a while loop means the "break" keyword was used
                 print(indentation*"\t" + "break;", file=sink)
             elif get_opcode(dso.version, dso.code[ip + 1]) == "OP_ITER_END":
@@ -328,16 +357,16 @@ def decompile(dso, sink=None, in_function=False, offset=0):
             ip += 1
         elif opcode == "OP_JMPIF_NP":
             binary_stack.append(str(int_stack.pop()) + " || ")
-            jmp_target = dso.code[ip] - offset
-            dso.code.insert(jmp_target, METADATA["META_END_BINARYOP"])
+            jmp_target = get_jmp_target(dso, ip, code_inserts, offset)
+            insert_code(dso, code_inserts, jmp_target, METADATA["META_END_BINARYOP"])
             ip += 1
         elif opcode == "OP_JMPIFNOT_NP":
             binary_stack.append(str(int_stack.pop()) + " && ")
-            jmp_target = dso.code[ip] - offset
-            dso.code.insert(jmp_target, METADATA["META_END_BINARYOP"])
+            jmp_target = get_jmp_target(dso, ip, code_inserts, offset)
+            insert_code(dso, code_inserts, jmp_target, METADATA["META_END_BINARYOP"])
             ip += 1
         elif opcode == "META_END_BINARYOP":
-            del dso.code[ip - 1]  # Delete the metadata we added to avoid desyncing absolute jumps.
+            delete_code(dso, code_inserts, ip - 1)  # Delete the metadata we added to avoid desyncing absolute jumps.
             ip -= 1
             op1 = binary_stack.pop()
             op2 = int_stack.pop()
@@ -347,7 +376,7 @@ def decompile(dso, sink=None, in_function=False, offset=0):
         elif opcode == "OP_JMPIFNOT" or opcode == "OP_JMPIFFNOT":
             # We need to determine the type of branch we're facing. The opcode just before the jump destination
             # gives us hints.
-            jmp_target = dso.code[ip] - offset
+            jmp_target = get_jmp_target(dso, ip, code_inserts, offset)
             if jmp_target < ip:
                 print("Error: unexpected backward jump.", file=sys.stderr)
                 sys.exit(1)
@@ -389,18 +418,26 @@ def decompile(dso, sink=None, in_function=False, offset=0):
                                                              op1))
                         ip = dso.code[jmp_target - 1]
                         continue
-                    # If this point is reached, this may not have been a ternary operator after all. Continue as if
-                    # it was an if-then-else.
-                # If-then-else
-                if opcode == "OP_JMPIFNOT":
-                    print(indentation*"\t" + "if (%s)" % int_stack.pop() + "\n" + indentation*"\t" + "{", file=sink)
-                elif opcode == "OP_JMPIFFNOT":
-                    print(indentation*"\t" + "if (%s)" % float_stack.pop() + "\n" + indentation*"\t" + "{", file=sink)
-                # Annotate code
-                dso.code[jmp_target - 2] = METADATA["META_ELSE"]
-                dso.code.insert(dso.code[jmp_target - 1], METADATA["META_ENDIF"])
+                    # If this point is reached, this may not have been a ternary operator after all.
+                dest_jmp_target = get_jmp_target(dso, jmp_target - 1, code_inserts, offset)
+                opcode_before_dest_jmp_dest = get_opcode(dso.version, dso.code[dest_jmp_target - 2])
+                jmp_break = opcode_before_dest_jmp_dest == "META_ENDWHILE" or opcode_before_dest_jmp_dest == "META_ENDWHILE_FLT" or opcode_before_dest_jmp_dest == "OP_ITER_END"
+                jmp_continue = False #TODO
+                if not jmp_break:
+                    # If opcode_before_dest jump is not a break or continue, the jump is to skip past an else
+                    # If-then-else
+                    if opcode == "OP_JMPIFNOT":
+                        print(indentation*"\t" + "if (%s)" % int_stack.pop() + "\n" + indentation*"\t" + "{", file=sink)
+                    elif opcode == "OP_JMPIFFNOT":
+                        print(indentation*"\t" + "if (%s)" % float_stack.pop() + "\n" + indentation*"\t" + "{", file=sink)
+                    # Annotate code
+                    dso.code[jmp_target - 2] = METADATA["META_ELSE"]
+                    insert_code(dso, code_inserts, dest_jmp_target, METADATA["META_ENDIF"])
+                    ip += 1
+                    indentation += 1
+                    continue
             elif (opcode_before_dest == "OP_JMPIFNOT" or opcode_before_dest == "OP_JMPIF" or opcode_before_dest == "OP_JMPIFF") and \
-                 dso.code[jmp_target - 1] == ip + 1:  # For/While loop
+                 dso.code[jmp_target - 1] - offset == ip + 1:  # For/While loop
                 ind = indentation*"\t"
                 # This may be an easy while loop:
                 if opcode == "OP_JMPIFNOT":
@@ -411,14 +448,16 @@ def decompile(dso, sink=None, in_function=False, offset=0):
                     dso.code[jmp_target - 2] = METADATA["META_ENDWHILE"]
                 elif opcode_before_dest == "OP_JMPIFF": 
                     dso.code[jmp_target - 2] = METADATA["META_ENDWHILE_FLT"]
-            else:
-                # Generic opcode before the jump target. We assume that the execution is continuing and
-                # that this is therefore a simple If control structure.
-                if opcode == "OP_JMPIFNOT":
-                    print(indentation*"\t" + "if (%s)" % int_stack.pop() + "\n" + indentation*"\t" + "{", file=sink)
-                elif opcode == "OP_JMPIFFNOT":
-                    print(indentation*"\t" + "if (%s)" % float_stack.pop() + "\n" + indentation*"\t" + "{", file=sink)
-                dso.code.insert(jmp_target, METADATA["META_ENDIF"])
+                ip += 1
+                indentation += 1
+                continue
+            # Generic opcode before the jump target. We assume that the execution is continuing and
+            # that this is therefore a simple If control structure.
+            if opcode == "OP_JMPIFNOT":
+                print(indentation*"\t" + "if (%s)" % int_stack.pop() + "\n" + indentation*"\t" + "{", file=sink)
+            elif opcode == "OP_JMPIFFNOT":
+                print(indentation*"\t" + "if (%s)" % float_stack.pop() + "\n" + indentation*"\t" + "{", file=sink)
+            insert_code(dso, code_inserts, jmp_target, METADATA["META_ENDIF"])
             ip += 1
             indentation += 1
         elif opcode == "OP_NOT":
@@ -489,7 +528,7 @@ def decompile(dso, sink=None, in_function=False, offset=0):
             indentation -= 1
             print(indentation*"\t" + "}", file=sink)
             if opcode == "META_ENDIF":
-                del dso.code[ip - 1]  # Delete the metadata we added to avoid desyncing absolute jumps.
+                delete_code(dso, code_inserts, ip - 1)  # Delete the metadata we added to avoid desyncing absolute jumps.
                 ip -= 1
             elif opcode == "META_ENDWHILE_FLT":
                 ip += 1
