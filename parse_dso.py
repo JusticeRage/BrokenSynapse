@@ -140,7 +140,7 @@ def main():
             # Create a backup of the original DSO in case the decompiled one is broken.
             if not os.path.exists("%s.bak" % f) and not args.stdout:
                 shutil.copy(f, "%s.bak" % f)
-            else:
+            elif not args.stdout:
                 f = "%s.bak" % f  # Work on the original DSO instead of possibly decompiling our own file.
 
             # Decompile the file

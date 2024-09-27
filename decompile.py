@@ -100,6 +100,7 @@ def decompile(dso, sink=None, in_function=False, offset=0):
     float_stack = []
     arguments = []
     binary_stack = []  # No counterpart in the VM. Used to keep track of binary operations.
+    object_creation_stack = []
     current_variable = None
     current_field = None
     current_object = None
@@ -168,7 +169,13 @@ def decompile(dso, sink=None, in_function=False, offset=0):
         elif opcode == "OP_SAVEVAR_UINT":
             print(indentation*"\t" + "%s = %s;" % (current_variable, int_stack[-1]), file=sink)
         elif opcode == "OP_UINT_TO_NONE":
-            if previous_opcodes[0] == "OP_END_OBJECT":
+            done_object_opcode = ""
+            if dso.version < 45:
+                done_object_opcode = "OP_END_OBJECT"
+            else:
+                done_object_opcode = "OP_FINISH_OBJECT"
+            
+            if previous_opcodes[0] == done_object_opcode:
                 print(indentation*"\t" + int_stack.pop(), file=sink)
             else:
                 int_stack.pop()
@@ -250,30 +257,47 @@ def decompile(dso, sink=None, in_function=False, offset=0):
             #  A 0 has been pushed to the int stack because it will contain a handle to the object.
             # Replace that 0 with the code of the object creation.
             parent = dso.get_string(dso.code[ip])
-            assert int_stack.pop() == 0
             if parent != "":
                 pass  # TODO!
             argv = arguments[-1]
             object_creation = "new %s(%s)\n" % (argv[0], argv[1] if argv[1] != "\"\"" else "")
             object_creation += indentation*"\t" + "{\n"
-            int_stack.append(object_creation)
+            if dso.version < 45:
+                assert int_stack.pop() == 0
+                int_stack.append(object_creation)
+            else:
+                object_creation_stack.append(object_creation)
             indentation += 1
             arguments.pop()
             # Structure: parent (size = 1 or 2), isDataBlock, isInternal, isSingleton, lineNumber, failjump.
             ip += 5 + ste_size
-            if (dso.version < 45):
+            if dso.version < 45:
                 ip -= 1 # Older versions don't have a byte for lineNumber
         elif opcode == "OP_ADD_OBJECT":
+            if dso.version < 45:
+                pass
+            else:
+                root = dso.code[ip]
+                if root:
+                    assert int_stack.pop() == 0
+                int_stack.append(object_creation_stack.pop())
             ip += 1
-            pass
         elif opcode == "OP_END_OBJECT":
             indentation -= 1
-            ip += 1
             op = int_stack.pop()
             if op.endswith("\n" + indentation*"\t" + "{\n"):  # Empty object declaration, omit body.
-                int_stack.append(op[:-3-indentation])
+                op = op[:-3-indentation]
             else:
-                int_stack.append(op + indentation*"\t" + "}")
+                op += indentation*"\t" + "}"
+            if dso.version < 45:
+                int_stack.append(op)
+            else:
+                root = dso.code[ip]
+                if root:
+                    int_stack.append(op)
+                else:
+                    int_stack.append(int_stack.pop() + indentation*"\t" + op + "\n")
+            ip += 1
         elif opcode == "OP_FINISH_OBJECT":
             pass
         elif opcode == "OP_ADVANCE_STR":
@@ -324,12 +348,18 @@ def decompile(dso, sink=None, in_function=False, offset=0):
             if dso.version <= 36 and len(string_stack) == 0:
                 string_stack.append("\"\"")
             if current_object is None:  # This is an object creation
-                int_stack[-1] += indentation*"\t" + "%s = %s;\n" % (current_field, string_stack[-1])
+                if dso.version < 45:
+                    int_stack[-1] += indentation*"\t" + "%s = %s;\n" % (current_field, string_stack[-1])
+                else:
+                    object_creation_stack[-1] += indentation*"\t" + "%s = %s;\n" % (current_field, string_stack[-1])
             else:  # This is a field affectation
                 print(indentation*"\t" + "%s.%s = %s;" % (current_object, current_field, string_stack[-1]), file=sink)
         elif opcode == "OP_SAVEFIELD_FLT":
             if current_object is None:  # This is an object creation
-                int_stack[-1] += indentation*"\t" + "%s = %s;\n" % (current_field, float_stack.pop())
+                if dso.version < 45:
+                    int_stack[-1] += indentation*"\t" + "%s = %s;\n" % (current_field, float_stack.pop())
+                else:
+                    object_creation_stack[-1] += indentation*"\t" + "%s = %s;\n" % (current_field, float_stack.pop())
             else:  # This is a field affectation
                 print(indentation*"\t" + "%s.%s = %s;" % (current_object, current_field, float_stack[-1]), file=sink)
         elif opcode == "OP_CMPEQ" or \
