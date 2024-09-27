@@ -74,6 +74,7 @@ def insert_code(dso, code_inserts, index, value):
 
 def delete_code(dso, code_inserts, index):
     del dso.code[index]
+    assert code_inserts[bisect.bisect_left(code_inserts, index)] == index
     del code_inserts[bisect.bisect_left(code_inserts, index)]
     for i in range(bisect.bisect_left(code_inserts, index), len(code_inserts)):
         code_inserts[i] -= 1
@@ -426,28 +427,31 @@ def decompile(dso, sink=None, in_function=False, offset=0):
                     # The loop ends with something being pushed on a stack. This is a ternary operator.
                     dso.code[jmp_target - 2] = METADATA["META_ELSE"]
                     # Obtain the stacks after evaluating the expression:
-                    s_s, i_s, f_s = partial_decompile(dso, ip+1, dso.code[jmp_target - 1], in_function)
-                    if len(s_s) == 2:
-                        op1 = s_s.pop()
-                        string_stack.append("(%s) ? %s : %s" % (int_stack.pop() if opcode == "OP_JMPIFNOT" else float_stack.pop(),
-                                                              s_s.pop(),
-                                                              op1))
-                        ip = dso.code[jmp_target - 1] # Skip past the construction
-                        continue
-                    elif len(i_s) == 2:
-                        op1 = i_s.pop()
-                        int_stack.append("(%s) ? %s : %s" % (int_stack.pop() if opcode == "OP_JMPIFNOT" else float_stack.pop(),
-                                                           i_s.pop(),
-                                                           op1))
-                        ip = dso.code[jmp_target - 1]
-                        continue
-                    elif len(f_s) == 2:
-                        op1 = f_s.pop()
-                        float_stack.append("(%s) ? %s : %s" % (int_stack.pop() if opcode == "OP_JMPIFNOT" else float_stack.pop(),
-                                                             f_s.pop(),
-                                                             op1))
-                        ip = dso.code[jmp_target - 1]
-                        continue
+                    try:
+                        s_s, i_s, f_s = partial_decompile(dso, ip+1, dso.code[jmp_target - 1], in_function, offset)
+                        if len(s_s) == 2:
+                            op1 = s_s.pop()
+                            string_stack.append("(%s) ? %s : %s" % (int_stack.pop() if opcode == "OP_JMPIFNOT" else float_stack.pop(),
+                                                                  s_s.pop(),
+                                                                  op1))
+                            ip = dso.code[jmp_target - 1] # Skip past the construction
+                            continue
+                        elif len(i_s) == 2:
+                            op1 = i_s.pop()
+                            int_stack.append("(%s) ? %s : %s" % (int_stack.pop() if opcode == "OP_JMPIFNOT" else float_stack.pop(),
+                                                               i_s.pop(),
+                                                               op1))
+                            ip = dso.code[jmp_target - 1]
+                            continue
+                        elif len(f_s) == 2:
+                            op1 = f_s.pop()
+                            float_stack.append("(%s) ? %s : %s" % (int_stack.pop() if opcode == "OP_JMPIFNOT" else float_stack.pop(),
+                                                                 f_s.pop(),
+                                                                 op1))
+                            ip = dso.code[jmp_target - 1]
+                            continue
+                    except:
+                        pass
                     # If this point is reached, this may not have been a ternary operator after all.
                 dest_jmp_target = get_jmp_target(dso, jmp_target - 1, code_inserts, offset)
                 opcode_before_dest_jmp_dest = get_opcode(dso.version, dso.code[dest_jmp_target - 2])
