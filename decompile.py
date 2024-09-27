@@ -77,12 +77,16 @@ def decompile(dso, sink=None, in_function=False, offset=0):
     current_object = None
     indentation = 0
     previous_opcodes = ["OP_INVALID", "OP_INVALID", "OP_INVALID", "OP_INVALID", "OP_INVALID"]
+    
+    # For debugging
+    # for i in range(len(dso.code)):
+    #     print("Opcode: %s\nValue: %s\nIp: %s\n" % (get_opcode(dso.version, dso.code[i]), hex(dso.code[i]), hex(i)), file=sys.stderr)
 
     # The big switch-case
     while ip < len(dso.code):
         opcode = get_opcode(dso.version, dso.code[ip])
         # For debugging
-        # print("Opcode: %s\nHex: %s\nIp: %s\n" % (opcode, hex(dso.code[ip]), ip), file=sys.stderr)
+        # print("Opcode: %s\nValue: %s\nIp: %s\n" % (opcode, hex(dso.code[ip]), hex(ip)), file=sys.stderr)
         if not opcode:
             raise ValueError("Encountered a value which does not translate to an opcode (%d)." % dso.code[ip])
         ip += 1
@@ -203,7 +207,9 @@ def decompile(dso, sink=None, in_function=False, offset=0):
                 # Omit the return if the function or the script ends here
                 print(indentation*"\t" + "return;", file=sink)
         elif opcode == "OP_RETURN_VOID":
-            pass
+            if ip != len(dso.code) and dso.code[ip] != METADATA["META_ENDFUNC"]:
+                # Omit the return if the function or the script ends here
+                print(indentation*"\t" + "return;", file=sink)
         elif opcode == "META_ENDFUNC":
             if in_function:
                 in_function = False
@@ -311,7 +317,7 @@ def decompile(dso, sink=None, in_function=False, offset=0):
             jmp_target = dso.code[ip]
             opcode_before_dest = get_opcode(dso.version, dso.code[jmp_target - 1])
             if opcode_before_dest == "META_ENDWHILE" or opcode_before_dest == "META_ENDWHILE_FLT":
-                # Jumping before the end of a while loop means the "break" keyword was used
+                # Jumping after the end of a while loop means the "break" keyword was used
                 print(indentation*"\t" + "break;", file=sink)
             elif get_opcode(dso.version, dso.code[ip + 1]) == "OP_ITER_END":
                 # Jumping right before the end of a foreach loop means no keyword was used
@@ -393,7 +399,8 @@ def decompile(dso, sink=None, in_function=False, offset=0):
                 # Annotate code
                 dso.code[jmp_target - 2] = METADATA["META_ELSE"]
                 dso.code.insert(dso.code[jmp_target - 1], METADATA["META_ENDIF"])
-            elif opcode_before_dest == "OP_JMPIFNOT" or opcode_before_dest == "OP_JMPIF" or opcode_before_dest == "OP_JMPIFF":  # For/While loop
+            elif (opcode_before_dest == "OP_JMPIFNOT" or opcode_before_dest == "OP_JMPIF" or opcode_before_dest == "OP_JMPIFF") and \
+                 dso.code[jmp_target - 1] == ip + 1:  # For/While loop
                 ind = indentation*"\t"
                 # This may be an easy while loop:
                 if opcode == "OP_JMPIFNOT":
