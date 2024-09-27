@@ -456,8 +456,8 @@ def decompile(dso, sink=None, in_function=False, offset=0):
                 dest_jmp_target = get_jmp_target(dso, jmp_target - 1, code_inserts, offset)
                 opcode_before_dest_jmp_dest = get_opcode(dso.version, dso.code[dest_jmp_target - 2])
                 jmp_break = opcode_before_dest_jmp_dest == "META_ENDWHILE" or opcode_before_dest_jmp_dest == "META_ENDWHILE_FLT" or opcode_before_dest_jmp_dest == "OP_ITER_END"
-                jmp_continue = False #TODO
-                if not jmp_break:
+                jmp_continue = get_opcode(dso.version, dso.code[dest_jmp_target]) == "OP_ITER" #TODO check for start of while loop
+                if not jmp_break and not jmp_continue:
                     # If opcode_before_dest jump is not a break or continue, the jump is to skip past an else
                     # If-then-else
                     if opcode == "OP_JMPIFNOT":
