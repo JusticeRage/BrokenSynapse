@@ -596,6 +596,11 @@ def decompile(dso, sink=None, in_function=False, offset=0):
             print(ind + "foreach(%s in %s)\n" % (dso.get_string(dso.code[ip]), string_stack.pop()) + ind + "{", file=sink)
             ip += 3
             indentation += 1
+        elif opcode == "OP_ITER_BEGIN_STR":
+            ind = indentation*"\t"
+            print(ind + "foreach$(%s in %s)\n" % (dso.get_string(dso.code[ip]), string_stack.pop()) + ind + "{", file=sink)
+            ip += 3
+            indentation += 1
         elif opcode == "OP_ITER":
             ip += 1
         else:
