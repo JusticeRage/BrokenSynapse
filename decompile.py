@@ -399,7 +399,7 @@ def decompile(dso, sink=None, in_function=False, offset=0):
             delete_code(dso, code_inserts, ip - 1)  # Delete the metadata we added to avoid desyncing absolute jumps.
             ip -= 1
             op1 = binary_stack.pop()
-            op2 = int_stack.pop()
+            op2 = str(int_stack.pop())
             if "&&" in op2 or "||" in op2:
                 op2 = "(%s)" % op2
             int_stack.append("%s%s" % (op1, op2))
