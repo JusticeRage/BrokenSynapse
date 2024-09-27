@@ -71,10 +71,14 @@ class DSOFile:
         Returns the value located at the given offset in a stringtable.
         """
         if not in_function:
-            st = self.global_string_table
+            stb = self.global_string_table
         else:
-            st = self.function_string_table
-        st = st.decode("UTF-8")
+            stb = self.function_string_table
+        st = stb.decode("UTF-8", "replace")
+        i = st.find("\ufffd")
+        while i != -1:
+            st = st[:i] + chr(stb[i]) + st[i + 1:]
+            i = st.find("\ufffd", i + 1)
         return st[offset:st.find("\x00", offset)].rstrip("\n")
 
     def get_float(self, pos, in_function = False):
