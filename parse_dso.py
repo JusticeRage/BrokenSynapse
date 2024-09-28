@@ -71,9 +71,14 @@ class DSOFile:
         Returns the value located at the given offset in a stringtable.
         """
         if not in_function:
-            st = self.global_string_table
+            stb = self.global_string_table
         else:
-            st = self.function_string_table
+            stb = self.function_string_table
+        st = stb.decode("UTF-8", "replace")
+        i = st.find("\ufffd")
+        while i != -1:
+            st = st[:i] + chr(stb[i]) + st[i + 1:]
+            i = st.find("\ufffd", i + 1)
         return st[offset:st.find("\x00", offset)].rstrip("\n")
 
     def get_float(self, pos, in_function = False):
@@ -105,53 +110,64 @@ def main():
     parser.add_argument("file", metavar='file', nargs="+", help="The DSO file to decompile.")
     parser.add_argument("--stdout", action="store_true", help="Dump the decompiled script to stdout.")
     args = parser.parse_args()
-    for f in args.file:
-        # Verify that the file exists.
-        if not os.path.exists(f):
-            print("{!] Error: could not find %s" % f, file=sys.stderr)
+    for path in args.file:
+        # Verify that the path exists.
+        if not os.path.exists(path):
+            print("{!] Error: could not find %s" % path, file=sys.stderr)
             continue
-
-        # Set the output filename
-        if args.stdout:
-            out = sys.stdout
+        
+        files = []
+        if os.path.isdir(path):
+            # If given a directory, we decompile files in that directory with a .cs.dso extension
+            for dirpath, dirnames, filenames in os.walk(path):
+                for f in filenames:
+                    if f.endswith(".cs.dso"):
+                        files.append(os.path.join(dirpath,f))
         else:
-            if f.endswith(".cs.dso"):
-                outfile = f[:-4]  # file.cs.dso -> file.cs
+            files.append(path)
+        
+        for f in files:
+            # Set the output filename
+            if args.stdout:
+                out = sys.stdout
             else:
-                outfile = "%s.cs" % f  # file -> file.cs
-            out = open(outfile, 'w')
+                if f.endswith(".cs.dso"):
+                    outfile = f[:-4]  # file.cs.dso -> file.cs
+                else:
+                    outfile = "%s.cs" % f  # file -> file.cs
+                out = open(outfile, 'w')
 
-        # Create a backup of the original DSO in case the decompiled one is broken.
-        if not os.path.exists("%s.bak" % f) and not args.stdout:
-            shutil.copy(f, "%s.bak" % f)
-        else:
-            f = "%s.bak" % f  # Work on the original DSO instead of possibly decompiling our own file.
+            # Create a backup of the original DSO in case the decompiled one is broken.
+            if not os.path.exists("%s.bak" % f) and not args.stdout:
+                shutil.copy(f, "%s.bak" % f)
+            elif not args.stdout:
+                f = "%s.bak" % f  # Work on the original DSO instead of possibly decompiling our own file.
 
-        # Decompile the file
-        dso = DSOFile(sys.argv[1])
-        try:
-            decompile(dso, sink=out)
-        except Exception:
-            exc_type, exc_value, tb = sys.exc_info()
-            if tb is not None:
-                prev = tb
-                curr = tb.tb_next
-                while curr is not None:
-                    prev = curr
-                    curr = curr.tb_next
-                    if "ip" in prev.tb_frame.f_locals and "offset" in prev.tb_frame.f_locals:
-                        break
-                if "ip" in prev.tb_frame.f_locals:
-                    ip = prev.tb_frame.f_locals["ip"]
-                    opcode = prev.tb_frame.f_locals["opcode"]
-                    print("Error encountered at ip=%d (%s) while decompiling %s." % (ip, opcode, f), file=sys.stderr)
+            # Decompile the file
+            dso = DSOFile(f)
+            try:
+                decompile(dso, sink=out)
+            except Exception:
+                exc_type, exc_value, tb = sys.exc_info()
+                if tb is not None:
+                    prev = tb
+                    curr = tb.tb_next
+                    while curr is not None:
+                        prev = curr
+                        curr = curr.tb_next
+                        if "ip" in prev.tb_frame.f_locals and "offset" in prev.tb_frame.f_locals:
+                            break
+                    if "ip" in prev.tb_frame.f_locals:
+                        ip = prev.tb_frame.f_locals["ip"]
+                        opcode = prev.tb_frame.f_locals["opcode"]
+                        print("Error encountered at ip=%d (%s) while decompiling %s." % (ip, opcode, f), file=sys.stderr)
+                    out.close()
+                    if not args.stdout:
+                        os.remove(outfile)
+                raise
+            if not args.stdout:
                 out.close()
-                if not args.stdout:
-                    os.remove(outfile)
-            raise
-        if not args.stdout:
-            out.close()
-            print("%s successfully decommpiled to %s." % (f, outfile))
+                print("%s successfully decompiled to %s." % (f, outfile))
 
 
 if __name__ == "__main__":
